@@ -5,6 +5,7 @@
 -}
 
 import Data.Char
+import Data.Either (fromRight)
 import Text.ParserCombinators.Parsec
 import Text.Parsec.Char
 
@@ -15,20 +16,35 @@ data Statement = Crates [Char]
                 | NoStatement
   deriving (Show)
 
-data CrState = CrState [Stack]
+newtype CrState = CrState [Stack] deriving (Show)
 
-newtype Stack = Stack [Char]
+newtype Stack = Stack [Char] deriving (Show)
 
 main :: IO ()
 main = do
   content <- readFile "input"
   let lns = (filter (/= "\r") . lines) content
-  print $ map (parse (choice [cratesParser, instructionParser, noStatementParser]) "") lns
+  let statements = map parseStatement lns
+  let clearedStatements = map (fromRight NoStatement) statements
+  let nbStacks = calcNbStacks clearedStatements
+  let initialState = CrState $ map newStack [0..(nbStacks - 1)]
+  let finalState = foldl processStatement initialState clearedStatements
+  print finalState
+
+calcNbStacks :: [Statement] -> Int
+calcNbStacks [] = error "no Crates statement"
+calcNbStacks ((Crates chars):tail) = length chars
+calcNbStacks (_:tail) = calcNbStacks tail
 
 processStatement :: CrState -> Statement -> CrState
-processStatement state (Crates chars) = error "crates"
-processStatement state (Instruction qty from to) = error "instruction"
+processStatement (CrState stacks) (Crates chars) = CrState $ map (uncurry push) zipped
+  where zipped = zip stacks chars
+processStatement state (Instruction qty from to) = error "todo instruction"
 processStatement state NoStatement = state
+
+parseStatement :: String -> Either ParseError Statement
+parseStatement = either
+  where either = parse (choice [cratesParser, instructionParser, noStatementParser]) ""
 
 cratesParser :: GenParser Char st Statement
 cratesParser = Crates <$> many1 crateParser
@@ -76,6 +92,9 @@ instructionParser = do
   return $ Instruction (read qty :: Int) (digitToInt from) (digitToInt to)
 
 -- Stack impl
+newStack :: Int -> Stack
+newStack _ = Stack []
+
 push :: Stack -> Char -> Stack
 push stack ' ' = stack
 push (Stack cs) c = Stack (cs ++ [c])
@@ -83,5 +102,5 @@ push (Stack cs) c = Stack (cs ++ [c])
 pop :: Stack -> (Char, Stack)
 pop (Stack (x:xs)) = (x, Stack xs)
 
-reverse :: Stack -> Stack
-reverse (Stack cs) = Stack $ reverse cs
+reverseStack :: Stack -> Stack
+reverseStack (Stack cs) = Stack $ reverse cs
